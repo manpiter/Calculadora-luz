@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#3b82f6">
+  <meta name="description" content="Calculadora de facturas de luz con comparador de rangos">
+  <title>Calculadora Luz</title>
+  
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; }
+    .container { max-width: 700px; margin: 0 auto; padding: 16px; }
+    
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .header h1 { font-size: 20px; color: #fff; }
+    .install-btn { 
+      background: #22c55e; color: white; border: none; padding: 8px 16px; 
+      border-radius: 6px; font-size: 13px; cursor: pointer; display: none; 
+    }
+    .install-btn.visible { display: block; }
+    
+    .card { 
+      background: #1e293b; border: 1px solid #334155; border-radius: 12px; 
+      padding: 16px; margin-bottom: 16px; 
+    }
+    .card-title { font-size: 16px; font-weight: 600; margin-bottom: 14px; color: #fff; }
+    
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-group { margin-bottom: 8px; }
+    .form-group label { display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
+    .form-group input {
+      width: 100%; padding: 10px; border: 1px solid #475569; border-radius: 6px;
+      background: #0f172a; color: #fff; font-size: 14px;
+    }
+    .form-group input:focus { outline: none; border-color: #3b82f6; }
+    
+    .btn { 
+      width: 100%; padding: 12px; border: none; border-radius: 6px; 
+      font-size: 14px; font-weight: 500; cursor: pointer;
+    }
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-success { background: #22c55e; color: white; }
+    .btn-danger { background: #ef4444; color: white; padding: 6px 12px; font-size: 12px; }
+    .btn-secondary { background: #6b7280; color: white; padding: 8px 16px; font-size: 12px; }
+    
+    .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .compare-box { padding: 14px; border-radius: 8px; }
+    .compare-box.a { background: linear-gradient(135deg, #1e3a5f, #0f172a); border-left: 4px solid #3b82f6; }
+    .compare-box.b { background: linear-gradient(135deg, #3d1e3a, #0f172a); border-left: 4px solid #ec4899; }
+    .compare-box h4 { font-size: 13px; margin-bottom: 10px; }
+    .compare-box.a h4 { color: #3b82f6; }
+    .compare-box.b h4 { color: #ec4899; }
+    
+    .result-box { 
+      margin-top: 14px; padding: 16px; border-radius: 8px; text-align: center; display: none;
+    }
+    .result-box.visible { display: block; }
+    .result-amount { font-size: 28px; font-weight: 700; }
+    .result-detail { font-size: 12px; color: #94a3b8; margin-top: 6px; }
+    
+    .table-container { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { color: #64748b; text-align: left; padding: 10px 8px; border-bottom: 1px solid #334155; }
+    td { padding: 12px 8px; border-bottom: 1px solid #334155; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .cost-highlight { color: #22c55e; font-weight: 600; }
+    
+    .chart-container { position: relative; height: 260px; }
+    
+    .offline-badge { 
+      position: fixed; top: 10px; right: 10px; background: #f59e0b; color: #000;
+      padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;
+      display: none; z-index: 1000;
+    }
+    .offline-badge.visible { display: block; }
+    
+    .toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px);
+      background: #22c55e; color: white; padding: 12px 24px; border-radius: 8px;
+      font-size: 14px; opacity: 0; transition: all 0.3s; z-index: 1000;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .toast.error { background: #ef4444; }
+    
+    .empty-state { text-align: center; padding: 40px; color: #64748b; }
+    .empty-state-icon { font-size: 48px; margin-bottom: 12px; }
+    
+    @media (max-width: 480px) {
+      .form-grid, .compare-grid { grid-template-columns: 1fr; }
+      .header h1 { font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="offline-badge" id="offlineBadge">Sin conexión</div>
+  <div class="toast" id="toast"></div>
+  
+  <div class="container">
+    <div class="header">
+      <h1>⚡ Calculadora de Luz</h1>
+      <button class="install-btn" id="installBtn">Instalar App</button>
+    </div>
+    
+    <div class="card">
+      <h2 class="card-title">Nueva Factura</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Número de Factura</label>
+          <input type="text" id="facturaNum" placeholder="Ej: 001-2024">
+        </div>
+        <div class="form-group">
+          <label>Monto Total ($)</label>
+          <input type="number" id="montoTotal" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label>Fecha Inicio</label>
+          <input type="date" id="fechaInicio">
+        </div>
+        <div class="form-group">
+          <label>Fecha Fin</label>
+          <input type="date" id="fechaFin">
+        </div>
+        <div class="form-group">
+          <label>kWh Consumidos (opcional)</label>
+          <input type="number" id="kwhConsumidos" placeholder="0">
+        </div>
+        <div class="form-group" style="display: flex; align-items: flex-end;">
+          <button class="btn btn-primary" onclick="agregarFactura()">Agregar Factura</button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="card">
+      <h2 class="card-title">Comparar Rangos</h2>
+      <div class="compare-grid">
+        <div class="compare-box a">
+          <h4>Rango A</h4>
+          <div class="form-group">
+            <label>Desde</label>
+            <input type="date" id="compAInicio">
+          </div>
+          <div class="form-group">
+            <label>Hasta</label>
+            <input type="date" id="compAFin">
+          </div>
+        </div>
+        <div class="compare-box b">
+          <h4>Rango B</h4>
+          <div class="form-group">
+            <label>Desde</label>
+            <input type="date" id="compBInicio">
+          </div>
+          <div class="form-group">
+            <label>Hasta</label>
+            <input type="date" id="compBFin">
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-success" onclick="compararRangos()" style="margin-top: 12px;">Comparar Rangos</button>
+      
+      <div id="resultadoComparacion" style="display: none;">
+        <div class="compare-grid" style="margin-top: 14px;">
+          <div class="compare-box a" id="resA"></div>
+          <div class="compare-box b" id="resB"></div>
+        </div>
+        <div class="result-box" id="resDiff"></div>
+      </div>
+    </div>
+    
+    <div class="card">
+      <h2 class="card-title">Evolución del Costo Diario</h2>
+      <div class="chart-container">
+        <canvas id="graficoFacturas"></canvas>
+      </div>
+    </div>
+    
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <h2 class="card-title" style="margin: 0;">Facturas Registradas</h2>
+        <button class="btn-secondary" onclick="exportarDatos()">Exportar JSON</button>
+      </div>
+      <div class="table-container" id="listaFacturas">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-state-icon">📋</div>
+          <div>No hay facturas registradas</div>
+          <div style="font-size: 13px; margin-top: 8px;">Agrega tu primera factura arriba</div>
+        </div>
+        <table id="tablaFacturas" style="display: none;">
+          <thead>
+            <tr>
+              <th>Factura</th>
+              <th>Periodo</th>
+              <th class="text-right">Monto</th>
+              <th class="text-right">Días</th>
+              <th class="text-right">$/Día</th>
+              <th class="text-center">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyFacturas"></tbody>
+        </table>
+      </div>
+    </div>
+    
+    <div style="text-align: center; padding: 20px; color: #64748b; font-size: 12px;">
+      <div>💾 Datos guardados localmente</div>
+      <div style="margin-top: 4px;">Funciona sin conexión</div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <script>
+    // Service Worker para PWA
+    if ('serviceWorker' in navigator) {
+      const swCode = `
+        self.addEventListener('install', e => {
+          e.waitUntil(self.skipWaiting());
+        });
+        self.addEventListener('activate', e => {
+          e.waitUntil(self.clients.claim());
+        });
+        self.addEventListener('fetch', e => {
+          e.respondWith(fetch(e.request).catch(() => new Response('Offline')));
+        });
+      `;
+      const blob = new Blob([swCode], { type: 'application/javascript' });
+      const swUrl = URL.createObjectURL(blob);
+      navigator.serviceWorker.register(swUrl).catch(() => {});
+    }
+
+    let facturas = JSON.parse(localStorage.getItem('facturasLuz') || '[]');
+    let chartInstance = null;
+    let deferredPrompt = null;
+
+    const hoy = new Date();
+    const mesPasado = new Date(hoy.getFullYear(), hoy.getMonth() - 1, hoy.getDate());
+    document.getElementById('fechaFin').valueAsDate = hoy;
+    document.getElementById('fechaInicio').valueAsDate = mesPasado;
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      document.getElementById('installBtn').classList.add('visible');
+    });
+
+    document.getElementById('installBtn').addEventListener('click', async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          showToast('App instalada correctamente');
+          document.getElementById('installBtn').classList.remove('visible');
+        }
+        deferredPrompt = null;
+      }
+    });
+
+    window.addEventListener('online', () => {
+      document.getElementById('offlineBadge').classList.remove('visible');
+      showToast('Conexión restaurada');
+    });
+    window.addEventListener('offline', () => {
+      document.getElementById('offlineBadge').classList.add('visible');
+    });
+
+    function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = 'toast' + (isError ? ' error' : '');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    function calcularDias(inicio, fin) {
+      const f1 = new Date(inicio);
+      const f2 = new Date(fin);
+      return Math.ceil(Math.abs(f2 - f1) / (1000 * 60 * 60 * 24)) + 1;
+    }
+
+    function agregarFactura() {
+      const num = document.getElementById('facturaNum').value.trim();
+      const monto = parseFloat(document.getElementById('montoTotal').value);
+      const inicio = document.getElementById('fechaInicio').value;
+      const fin = document.getElementById('fechaFin').value;
+      const kwh = parseFloat(document.getElementById('kwhConsumidos').value) || 0;
+
+      if (!num || !monto || !inicio || !fin) {
+        showToast('Completa todos los campos obligatorios', true);
+        return;
+      }
+      if (new Date(inicio) > new Date(fin)) {
+        showToast('La fecha inicio debe ser anterior a la fecha fin', true);
+        return;
+      }
+
+      const dias = calcularDias(inicio, fin);
+      const factura = {
+        id: Date.now(),
+        numero: num,
+        monto: monto,
+        fechaInicio: inicio,
+        fechaFin: fin,
+        dias: dias,
+        costoDia: monto / dias,
+        kwh: kwh
+      };
+
+      facturas.push(factura);
+      facturas.sort((a, b) => new Date(a.fechaInicio) - new Date(b.fechaInicio));
+      localStorage.setItem('facturasLuz', JSON.stringify(facturas));
+      
+      actualizarVista();
+      showToast('Factura agregada correctamente');
+      
+      document.getElementById('facturaNum').value = '';
+      document.getElementById('montoTotal').value = '';
+      document.getElementById('kwhConsumidos').value = '';
+    }
+
+    function eliminarFactura(id) {
+      if (confirm('¿Eliminar esta factura?')) {
+        facturas = facturas.filter(f => f.id !== id);
+        localStorage.setItem('facturasLuz', JSON.stringify(facturas));
+        actualizarVista();
+        showToast('Factura eliminada');
+      }
+    }
+
+    function formatearFecha(fechaStr) {
+      return new Date(fechaStr).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    }
+
+    function actualizarVista() {
+      const emptyState = document.getElementById('emptyState');
+      const tabla = document.getElementById('tablaFacturas');
+      const tbody = document.getElementById('tbodyFacturas');
+
+      if (facturas.length === 0) {
+        emptyState.style.display = 'block';
+        tabla.style.display = 'none';
+        if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+        return;
+      }
+
+      emptyState.style.display = 'none';
+      tabla.style.display = 'table';
+
+      tbody.innerHTML = facturas.map(f => `
+        <tr>
+          <td>${f.numero}</td>
+          <td style="font-size: 11px;">${formatearFecha(f.fechaInicio)} - ${formatearFecha(f.fechaFin)}</td>
+          <td class="text-right">$${f.monto.toFixed(2)}</td>
+          <td class="text-right">${f.dias}</td>
+          <td class="text-right cost-highlight">$${f.costoDia.toFixed(2)}</td>
+          <td class="text-center"><button class="btn-danger" onclick="eliminarFactura(${f.id})">Eliminar</button></td>
+        </tr>
+      `).join('');
+
+      actualizarGrafico();
+    }
+
+    function actualizarGrafico() {
+      const ctx = document.getElementById('graficoFacturas').getContext('2d');
+      if (chartInstance) chartInstance.destroy();
+
+      const labels = facturas.map(f => `${formatearFecha(f.fechaInicio)}-${formatearFecha(f.fechaFin)}`);
+      
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Costo por Día ($)',
+            data: facturas.map(f => f.costoDia),
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 5,
+            pointBackgroundColor: '#3b82f6'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#334155' } },
+            y: { ticks: { color: '#94a3b8', callback: v => '$' + v.toFixed(0) }, grid: { color: '#334155' } }
+          }
+        }
+      });
+    }
+
+    function compararRangos() {
+      const aInicio = document.getElementById('compAInicio').value;
+      const aFin = document.getElementById('compAFin').value;
+      const bInicio = document.getElementById('compBInicio').value;
+      const bFin = document.getElementById('compBFin').value;
+
+      if (!aInicio || !aFin || !bInicio || !bFin) {
+        showToast('Completa todas las fechas', true);
+        return;
+      }
+
+      const resA = calcularRango(aInicio, aFin);
+      const resB = calcularRango(bInicio, bFin);
+
+      document.getElementById('resultadoComparacion').style.display = 'block';
+
+      document.getElementById('resA').innerHTML = `
+        <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Rango A</div>
+        <div style="font-size: 10px; color: #64748b; margin-bottom: 8px;">${formatearFecha(aInicio)} - ${formatearFecha(aFin)}</div>
+        <div class="result-amount" style="color: #3b82f6;">$${resA.costoDiaPromedio.toFixed(2)}<span style="font-size: 14px; color: #94a3b8;">/día</span></div>
+        <div class="result-detail">${resA.totalDias} días · $${resA.totalMonto.toFixed(2)} total</div>
+      `;
+
+      document.getElementById('resB').innerHTML = `
+        <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Rango B</div>
+        <div style="font-size: 10px; color: #64748b; margin-bottom: 8px;">${formatearFecha(bInicio)} - ${formatearFecha(bFin)}</div>
+        <div class="result-amount" style="color: #ec4899;">$${resB.costoDiaPromedio.toFixed(2)}<span style="font-size: 14px; color: #94a3b8;">/día</span></div>
+        <div class="result-detail">${resB.totalDias} días · $${resB.totalMonto.toFixed(2)} total</div>
+      `;
+
+      const diff = resB.costoDiaPromedio - resA.costoDiaPromedio;
+      const diffPorc = resA.costoDiaPromedio > 0 ? ((diff / resA.costoDiaPromedio) * 100).toFixed(1) : 0;
+      const esMayor = diff > 0;
+
+      const resDiff = document.getElementById('resDiff');
+      resDiff.innerHTML = `
+        <div style="font-size: 15px; color: ${esMayor ? '#ef4444' : '#22c55e'};">
+          ${esMayor ? '↑' : '↓'} Rango B es <strong>$${Math.abs(diff).toFixed(2)}/día</strong> ${esMayor ? 'más caro' : 'más barato'}
+          <div style="margin-top: 6px; font-size: 13px;">(${Math.abs(diffPorc)}% de diferencia)</div>
+        </div>
+      `;
+      resDiff.style.background = esMayor ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)';
+      resDiff.classList.add('visible');
+    }
+
+    function calcularRango(inicio, fin) {
+      const fInicio = new Date(inicio);
+      const fFin = new Date(fin);
+      let totalMonto = 0;
+      let diasContados = 0;
+
+      facturas.forEach(f => {
+        const fFacturaInicio = new Date(f.fechaInicio);
+        const fFacturaFin = new Date(f.fechaFin);
+        
+        if (fFacturaInicio <= fFin && fFacturaFin >= fInicio) {
+          const overlapInicio = new Date(Math.max(fInicio, fFacturaInicio));
+          const overlapFin = new Date(Math.min(fFin, fFacturaFin));
+          const diasOverlap = calcularDias(overlapInicio, overlapFin);
+          totalMonto += f.monto * (diasOverlap / f.dias);
+          diasContados += diasOverlap;
+        }
+      });
+
+      const totalDias = calcularDias(fInicio, fFin);
+      return { totalMonto, totalDias, costoDiaPromedio: diasContados > 0 ? totalMonto / diasContados : 0 };
+    }
+
+    function exportarDatos() {
+      const dataStr = JSON.stringify(facturas, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'facturas-luz.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Datos exportados');
+    }
+
+    actualizarVista();
+  </script>
+</body>
+</html>
